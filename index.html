@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plant & Lab Management Portal</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f2f5; font-family: system-ui, -apple-system, sans-serif; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+    .nav-pills .nav-link { border-radius: 8px; font-weight: 500; }
+    .nav-pills .nav-link.active { background: #0d6efd; }
+    .form-label { font-weight: 600; font-size: .9rem; }
+    .lot-badge { font-size: .75rem; padding: 2px 8px; border-radius: 12px; }
+    .lot-tested { background: #d1e7dd; color: #0f5132; }
+    .lot-untested { background: #fff3cd; color: #664d03; }
+    .mic-btn { cursor: pointer; border: 1px solid #ced4da; background: #fff; border-radius: 6px; padding: 4px 8px; }
+    .dp-list { max-height: 280px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 8px; background: #fff; }
+    .dp-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; margin: 0; font-size: .9rem; }
+    .dp-item:hover { background: #f5f9ff; }
+    .dp-item.on { background: #e8f0fe; }
+    .dp-item .bal { margin-left: auto; font-weight: 700; white-space: nowrap; }
+    .dp-card { border: 1px solid #c2e7ff; border-left: 5px solid #0d6efd; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: #fff; }
+    #webcam { width: 100%; max-width: 320px; border-radius: 8px; background: #000; }
+    .preview-box { max-width: 180px; border-radius: 8px; border: 2px solid #198754; }
+    .voice-bar { background: #e9ecef; border-radius: 8px; padding: 8px 12px; font-size: .85rem; }
+    #camStatus.ok { color: #1b5e20; font-weight: 600; }
+    #camStatus.bad { color: #b71c1c; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="container py-3" style="max-width: 720px;">
+
+  <h4 class="text-center mb-1">Plant & Lab Management Portal</h4>
+  <p class="text-center text-muted small mb-3">Production Handover • Quality Lab (Zinc Oxide) • Despatch Stock</p>
+
+  <div class="voice-bar mb-3 text-center">
+    🎤 Voice language:
+    <button type="button" class="btn btn-sm btn-primary ms-1" onclick="setVoiceLang('en-IN')">English</button>
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="setVoiceLang('hi-IN')">हिन्दी</button>
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="setVoiceLang('bn-IN')">বাংলা</button>
+  </div>
+
+  <ul class="nav nav-pills nav-fill mb-3" id="mainTabs">
+    <li class="nav-item"><button class="nav-link active" onclick="switchTab('production')">1. Production Handover</button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('lab')">2. Lab Testing</button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('despatch')">3. Despatch</button></li>
+  </ul>
+
+  <!-- PRODUCTION -->
+  <div id="tab-production" class="card p-4">
+    <h5 class="text-primary mb-3">Production Handover</h5>
+    <form id="prodForm" onsubmit="handleProdSubmit(event)">
+      <div class="mb-3">
+        <label class="form-label">Production Date <span class="text-danger">*</span></label>
+        <input type="date" class="form-control" name="prodDate" id="prodDate" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Unit</label>
+        <select class="form-select" name="unit" id="prodUnit">
+          <option>P5F1</option><option>P5F2</option><option>P6F1</option><option>P6F2</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Details</label>
+        <select class="form-select" name="details" id="prodDetails">
+          <option>BH</option><option>CT</option><option>OTHER</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Shift</label>
+        <select class="form-select" name="shift" id="prodShift">
+          <option>Day</option><option>Night</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Handover Quantity <span class="text-danger">*</span></label>
+        <input type="number" class="form-control" name="qty" id="prodQty" placeholder="e.g. 1500" min="1" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Serial Number <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" name="serial" id="prodSerial" placeholder="E.G. T-11-26-01" required>
+      </div>
+      <button type="submit" class="btn btn-primary w-100">Preview & Submit</button>
+    </form>
+  </div>
+
+  <!-- LAB TESTING -->
+  <div id="tab-lab" class="card p-4" style="display:none;">
+    <h5 class="text-success mb-3">Lab Testing for a Batch Number</h5>
+    <form id="labForm" onsubmit="handleLabSubmit(event)">
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <label class="form-label">Test Date <span class="text-danger">*</span></label>
+          <input type="date" class="form-control" name="testDate" id="labDate" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label">Batch Number <span class="text-danger">*</span></label>
+          <select class="form-select" name="prodId" id="labBatchSelect" required onchange="onLabBatchChange()">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="showTested" onchange="loadLabBatches()">
+        <label class="form-check-label small" for="showTested">Show already tested batches (re-test)</label>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Serial Number</label>
+        <input type="text" class="form-control bg-light" id="labSerial" readonly>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Tester Name <span class="text-danger">*</span></label>
+        <select class="form-select" name="tester" id="labTester" required>
+          <option value="">Select tester</option>
+        </select>
+      </div>
+
+      <!-- LIVE CAMERA SELFIE -->
+      <div class="mb-3">
+        <label class="form-label">Tester Selfie <span class="text-danger">* compulsory</span></label>
+        <div class="mb-2">
+          <video id="webcam" autoplay playsinline muted></video>
+        </div>
+        <div id="camStatus" class="small mb-2">Starting camera...</div>
+        <div class="d-flex gap-2 mb-2">
+          <button type="button" class="btn btn-sm btn-outline-primary" onclick="captureSelfie()">📸 Capture Selfie</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="initWebcam()">🔄 Restart Camera</button>
+        </div>
+        <div id="previewContainer" style="display:none;">
+          <img id="formThumbnail" class="preview-box">
+          <div class="small text-success mt-1">✔ Selfie captured</div>
+        </div>
+        <input type="hidden" name="selfieBase64" id="selfieBase64">
+      </div>
+
+      <hr>
+      <h6 class="text-danger">MANDATORY TEST PARAMETERS</h6>
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <label class="form-label">Zinc as ZnO (%) *</label>
+          <input type="number" step="0.01" class="form-control" name="zn" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label">Matter insoluble in HCl (%) *</label>
+          <input type="number" step="0.01" class="form-control" name="insol" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label">Wet sieve residue > 45 micron (%) *</label>
+          <input type="number" step="0.01" class="form-control" name="sieve" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label">Moisture at 105 DegC (%) *</label>
+          <input type="number" step="0.01" class="form-control" name="moisture" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label">Loss on ignition at 850 DegC (%) *</label>
+          <input type="number" step="0.01" class="form-control" name="loi" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label">Clarity of solution in HCl *</label>
+          <input type="text" class="form-control" name="clarity" placeholder="CLEAR" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label">Lead as Pb (ppm) *</label>
+          <input type="number" step="1" class="form-control" name="pb" required>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-success w-100">Preview & Save Lab Result</button>
+    </form>
+  </div>
+
+  <!-- DESPATCH -->
+  <div id="tab-despatch" class="card p-4" style="display:none;">
+    <h5 class="text-primary mb-3">Despatch</h5>
+    <form id="despForm" onsubmit="handleDespatchSubmit(event)">
+      <div class="mb-3">
+        <label class="form-label">Despatch Date *</label>
+        <input type="date" class="form-control" name="date" id="despDate" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Seller / Customer Name *</label>
+        <input type="text" class="form-control" name="sellerName" id="despSeller" required>
+      </div>
+
+      <label class="form-label">Select Batch(es)</label>
+      <input type="text" class="form-control mb-2" id="dpSearch" placeholder="Search..." oninput="renderBatchList()">
+      <div class="btn-group btn-group-sm mb-2">
+        <button type="button" class="btn btn-outline-secondary active" id="fltAll" onclick="setDpFilter('all')">All</button>
+        <button type="button" class="btn btn-outline-secondary" id="fltTested" onclick="setDpFilter('tested')">Tested</button>
+        <button type="button" class="btn btn-outline-secondary" id="fltPending" onclick="setDpFilter('pending')">Pending</button>
+      </div>
+      <div id="dpList" class="dp-list mb-3"></div>
+      <div id="dpSelectedBox" style="display:none;">
+        <h6>Selected</h6>
+        <div id="dpSelected"></div>
+        <div class="fw-bold">Total Qty: <span id="dpTotal">0</span></div>
+      </div>
+      <button type="submit" class="btn btn-primary w-100 mt-3">Preview & Submit Despatch</button>
+    </form>
+  </div>
+
+  <div id="alertBox" class="alert mt-3" style="display:none;"></div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm Submission</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="previewBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Edit</button>
+        <button type="button" class="btn btn-primary" id="confirmBtn">Confirm & Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // ========== CONFIG ==========
+  const API_URL = "https://script.google.com/macros/s/AKfycbyMX0c1guPvAnA1xuXKSAWxAC0rfxeRGepbJyNCoEMq-dREb0LBCiZXC7dh9o-vkmx5/exec";
+
+  // ========== GLOBALS ==========
+  let voiceLang = 'en-IN';
+  let videoStream = null;
+  let despatchLots = [];
+  let dpSel = {};
+  let dpFilter = 'all';
+  let labBatches = [];
+  let pendingSubmit = null;
+
+  // ========== HELPERS ==========
+  function todayStr() {
+    return new Date().toISOString().slice(0, 10);
+  }
+  function showAlert(msg, ok) {
+    const box = document.getElementById('alertBox');
+    box.className = 'alert mt-3 alert-' + (ok ? 'success' : 'danger');
+    box.textContent = msg;
+    box.style.display = 'block';
+    setTimeout(() => box.style.display = 'none', 7000);
+  }
+  function switchTab(name) {
+    ['production', 'lab', 'despatch'].forEach(t => {
+      document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
+    });
+    document.querySelectorAll('#mainTabs .nav-link').forEach((btn, i) => {
+      btn.classList.toggle('active', ['production','lab','despatch'][i] === name);
+    });
+    if (name === 'lab') {
+      loadLabBatches();
+      initWebcam();
+    }
+    if (name === 'despatch') loadStockIDs();
+    if (name !== 'lab' && videoStream) {
+      videoStream.getTracks().forEach(t => t.stop());
+      videoStream = null;
+    }
+  }
+
+  // ========== API CALL ==========
+  async function apiCall(action, data = {}) {
+    const payload = { action, ...data };
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  }
+
+  // ========== LIVE CAMERA ==========
+  function setCamStatus(msg, ok) {
+    const el = document.getElementById('camStatus');
+    el.textContent = msg;
+    el.className = 'small mb-2 ' + (ok === true ? 'ok' : ok === false ? 'bad' : '');
+  }
+
+  function initWebcam() {
+    if (videoStream) {
+      videoStream.getTracks().forEach(t => t.stop());
+      videoStream = null;
+    }
+    const video = document.getElementById('webcam');
+    setCamStatus('Starting camera...', null);
+
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    })
+    .then(stream => {
+      videoStream = stream;
+      video.srcObject = stream;
+      video.play().then(() => setCamStatus('✔ Camera ready – click “Capture Selfie”', true))
+                 .catch(() => setCamStatus('✔ Camera ready', true));
+    })
+    .catch(err => {
+      setCamStatus('✖ Camera error: ' + (err.name || err) + '. Allow camera permission and try again.', false);
+    });
+  }
+
+  function captureSelfie() {
+    const video = document.getElementById('webcam');
+    if (!video || !video.srcObject || !video.videoWidth) {
+      showAlert('Camera is not ready. Click “Restart Camera”.', false);
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+
+    // Add IST timestamp
+    const ts = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata', day:'2-digit', month:'short', year:'numeric',
+      hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true
+    }).format(new Date()) + ' IST';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, canvas.height - 28, canvas.width, 28);
+    ctx.fillStyle = '#FFD700';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(ts, 10, canvas.height - 8);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    document.getElementById('selfieBase64').value = dataUrl;
+    document.getElementById('formThumbnail').src = dataUrl;
+    document.getElementById('previewContainer').style.display = 'block';
+    showAlert('Selfie captured successfully!', true);
+  }
+
+  // ========== PRODUCTION ==========
+  function handleProdSubmit(e) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    document.getElementById('previewBody').innerHTML = `
+      <p><b>Date:</b> ${data.prodDate}<br>
+      <b>Unit:</b> ${data.unit} | <b>Details:</b> ${data.details} | <b>Shift:</b> ${data.shift}<br>
+      <b>Qty:</b> ${data.qty}<br><b>Serial:</b> ${data.serial}</p>`;
+    pendingSubmit = async () => {
+      try {
+        const r = await apiCall('submitProductionHandover', data);
+        showAlert(r.message || (r.ok !== false ? 'Saved!' : r.error), r.ok !== false);
+        if (r.ok !== false) e.target.reset();
+      } catch (err) { showAlert(err.message, false); }
+    };
+    new bootstrap.Modal('#previewModal').show();
+    document.getElementById('confirmBtn').onclick = () => {
+      bootstrap.Modal.getInstance('#previewModal').hide();
+      pendingSubmit && pendingSubmit();
+    };
+  }
+
+  // ========== LAB ==========
+  async function loadLabBatches() {
+    const showTested = document.getElementById('showTested').checked;
+    try {
+      const list = await apiCall('getAvailableLabBatches', { showTested });
+      labBatches = Array.isArray(list) ? list : (list.data || []);
+      const sel = document.getElementById('labBatchSelect');
+      sel.innerHTML = '<option value="">Select batch</option>';
+      labBatches.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = b.label || b.id;
+        sel.appendChild(opt);
+      });
+    } catch (err) { showAlert(err.message, false); }
+  }
+
+  function onLabBatchChange() {
+    const id = document.getElementById('labBatchSelect').value;
+    const b = labBatches.find(x => x.id === id);
+    document.getElementById('labSerial').value = b ? (b.serial || '') : '';
+  }
+
+  function handleLabSubmit(e) {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    if (!data.selfieBase64) {
+      showAlert('Please capture the selfie first.', false);
+      return;
+    }
+    document.getElementById('previewBody').innerHTML = `
+      <p><b>Batch:</b> ${data.prodId}<br>
+      <b>Tester:</b> ${data.tester}<br>
+      <b>Test Date:</b> ${data.testDate}<br>
+      Selfie: Yes</p>`;
+    pendingSubmit = async () => {
+      try {
+        const r = await apiCall('submitLabTest', data);
+        showAlert(r.message || (r.ok !== false ? 'Lab result saved!' : r.error), r.ok !== false);
+        if (r.ok !== false) {
+          e.target.reset();
+          document.getElementById('previewContainer').style.display = 'none';
+          document.getElementById('selfieBase64').value = '';
+          loadLabBatches();
+        }
+      } catch (err) { showAlert(err.message, false); }
+    };
+    new bootstrap.Modal('#previewModal').show();
+    document.getElementById('confirmBtn').onclick = () => {
+      bootstrap.Modal.getInstance('#previewModal').hide();
+      pendingSubmit && pendingSubmit();
+    };
+  }
+
+  // ========== DESPATCH ==========
+  async function loadStockIDs() {
+    try {
+      const list = await apiCall('getAvailableStockIDs');
+      despatchLots = Array.isArray(list) ? list : (list.data || []);
+      renderBatchList();
+    } catch (err) { showAlert(err.message, false); }
+  }
+
+  function setDpFilter(f) {
+    dpFilter = f;
+    ['fltAll','fltTested','fltPending'].forEach(id => document.getElementById(id).classList.remove('active'));
+    document.getElementById(f === 'all' ? 'fltAll' : f === 'tested' ? 'fltTested' : 'fltPending').classList.add('active');
+    renderBatchList();
+  }
+
+  function renderBatchList() {
+    const q = (document.getElementById('dpSearch').value || '').toLowerCase();
+    const box = document.getElementById('dpList');
+    box.innerHTML = '';
+    despatchLots.forEach(lot => {
+      if (dpFilter === 'tested' && !lot.tested) return;
+      if (dpFilter === 'pending' && lot.tested) return;
+      if (q && !(lot.id + ' ' + (lot.serial||'')).toLowerCase().includes(q)) return;
+      const div = document.createElement('label');
+      div.className = 'dp-item' + (dpSel[lot.id] ? ' on' : '');
+      div.innerHTML = `
+        <input type="checkbox" ${dpSel[lot.id]?'checked':''} onchange="toggleLot('${lot.id}', this.checked)">
+        <span>${lot.id}</span>
+        <span class="lot-badge ${lot.tested?'lot-tested':'lot-untested'}">${lot.tested?'Tested':'Pending'}</span>
+        <span class="bal">${lot.left} left</span>`;
+      box.appendChild(div);
+    });
+    renderSelected();
+  }
+
+  function toggleLot(id, checked) {
+    if (checked) {
+      const lot = despatchLots.find(l => l.id === id);
+      dpSel[id] = { qty: Math.min(1000, lot.left), grade: (lot.grades && lot.grades[0]) || '' };
+    } else delete dpSel[id];
+    renderBatchList();
+  }
+
+  function renderSelected() {
+    const box = document.getElementById('dpSelected');
+    const wrap = document.getElementById('dpSelectedBox');
+    const ids = Object.keys(dpSel);
+    if (!ids.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    let html = '', total = 0;
+    ids.forEach(id => {
+      const lot = despatchLots.find(l => l.id === id);
+      const s = dpSel[id];
+      total += Number(s.qty)||0;
+      const grades = (lot.grades||[]).map(g => `<option value="${g}" ${g===s.grade?'selected':''}>${g}</option>`).join('');
+      html += `<div class="dp-card">
+        <div class="d-flex justify-content-between"><strong>${id}</strong>
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="toggleLot('${id}',false)">✕</button></div>
+        <div class="row g-2 mt-1">
+          <div class="col-6"><label class="small">Qty (max ${lot.left})</label>
+            <input type="number" class="form-control form-control-sm" value="${s.qty}" min="1" max="${lot.left}"
+              onchange="dpSel['${id}'].qty=this.value"></div>
+          <div class="col-6"><label class="small">Grade</label>
+            <select class="form-select form-select-sm" onchange="dpSel['${id}'].grade=this.value">
+              ${grades || '<option value="">—</option>'}</select></div>
+        </div></div>`;
+    });
+    box.innerHTML = html;
+    document.getElementById('dpTotal').textContent = total;
+  }
+
+  function handleDespatchSubmit(e) {
+    e.preventDefault();
+    const date = document.getElementById('despDate').value;
+    const sellerName = document.getElementById('despSeller').value;
+    const items = Object.keys(dpSel).map(id => ({
+      prodId: id, qty: Number(dpSel[id].qty), grade: dpSel[id].grade
+    }));
+    if (!date || !sellerName || !items.length) {
+      showAlert('Date, seller and at least one batch required.', false);
+      return;
+    }
+    let rows = items.map(i => `<tr><td>${i.prodId}</td><td>${i.qty}</td><td>${i.grade}</td></tr>`).join('');
+    document.getElementById('previewBody').innerHTML = `
+      <p><b>Date:</b> ${date}<br><b>Seller:</b> ${sellerName}</p>
+      <table class="table table-sm"><thead><tr><th>Batch</th><th>Qty</th><th>Grade</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+    pendingSubmit = async () => {
+      try {
+        const r = await apiCall('submitDespatch', { date, sellerName, items });
+        showAlert(r.message || (r.ok !== false ? 'Despatch saved!' : r.error), r.ok !== false);
+        if (r.ok !== false) {
+          dpSel = {};
+          e.target.reset();
+          loadStockIDs();
+        }
+      } catch (err) { showAlert(err.message, false); }
+    };
+    new bootstrap.Modal('#previewModal').show();
+    document.getElementById('confirmBtn').onclick = () => {
+      bootstrap.Modal.getInstance('#previewModal').hide();
+      pendingSubmit && pendingSubmit();
+    };
+  }
+
+  // ========== INIT ==========
+  document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('prodDate').value = todayStr();
+    document.getElementById('labDate').value = todayStr();
+    document.getElementById('despDate').value = todayStr();
+
+    try {
+      const list = await apiCall('getTesterList');
+      const testers = Array.isArray(list) ? list : (list.data || []);
+      const sel = document.getElementById('labTester');
+      testers.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.textContent = t;
+        sel.appendChild(opt);
+      });
+    } catch (e) {}
+  });
+</script>
+</body>
+</html>
