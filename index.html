@@ -24,6 +24,8 @@
     #camStatus.ok { color:#1b5e20; font-weight:600; }
     #camStatus.bad { color:#b71c1c; font-weight:600; }
     #alertBox { white-space:pre-wrap; word-break:break-word; }
+    #pvBody th { width:45%; font-weight:500; color:#555; }
+    #pvBody td { font-weight:700; word-break:break-word; }
     #conn.ok { color:#1b5e20; } #conn.bad { color:#b71c1c; font-weight:600; }
   </style>
 </head>
@@ -52,7 +54,7 @@
       <div class="mb-3">
         <label class="form-label">Unit</label>
         <select class="form-select" id="prodUnit">
-          <option>P5F1</option><option>P5F2</option><option>P7F1</option><option>P7F2</option>
+          <option>P5F1</option><option>P5F2</option><option>P5F3</option><option>P7F1</option><option>P7F2</option><option>P7F3</option>
         </select>
       </div>
       <div class="mb-3">
@@ -62,7 +64,7 @@
       <div class="mb-3">
         <label class="form-label">Shift</label>
         <select class="form-select" id="prodShift">
-          <option>Day</option><option>Day2</option><option>Night</option><option>Night2</option>
+          <option>Day</option><option>Day2</option><option>Night</option><option>Night2</option><option>Day &amp; Night</option>
         </select>
       </div>
       <div class="mb-3">
@@ -106,9 +108,9 @@
       </div>
 
       <div class="mb-3">
-        <label class="form-label">Tester Selfie * (compulsory)</label>
+        <label class="form-label">Tester Selfie <span class="text-muted fw-normal">(optional)</span></label>
         <div class="mb-2"><video id="webcam" autoplay playsinline muted></video></div>
-        <div id="camStatus" class="small mb-2">Camera starts when this tab opens.</div>
+        <div id="camStatus" class="small mb-2">Camera starts when this tab opens. Selfie is optional - you can submit without it.</div>
         <div class="d-flex gap-2 mb-2">
           <button type="button" class="btn btn-sm btn-outline-primary" id="btnCapture">📸 Capture Selfie</button>
           <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCam">🔄 Restart Camera</button>
@@ -167,14 +169,22 @@
   <div id="alertBox" class="alert mt-3" style="display:none;"></div>
 </div>
 
-<div class="modal fade" id="previewModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">Confirm Submission</h5>
+<div class="modal fade" id="previewModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h6 class="modal-title" id="pvTitle">Preview</h6>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body" id="previewBody"></div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Edit</button>
-      <button type="button" class="btn btn-primary" id="confirmBtn">Confirm &amp; Save</button>
+    <div class="modal-body">
+      <div class="alert alert-warning py-2 small mb-2">Please check every entry. Nothing is saved until you press <b>Confirm &amp; Submit</b>.</div>
+      <div id="pvPhoto" class="text-center mb-2"></div>
+      <table class="table table-sm table-striped mb-2"><tbody id="pvBody"></tbody></table>
+      <div id="pvExtra"></div>
+    </div>
+    <div class="modal-footer justify-content-between">
+      <button type="button" class="btn btn-outline-primary btn-sm" id="pvRead">🔊 Read aloud</button>
+      <div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">✏ Back to Edit</button>
+        <button type="button" class="btn btn-success btn-sm" id="confirmBtn">✔ Confirm &amp; Submit</button>
+      </div>
     </div>
   </div></div>
 </div>
@@ -216,11 +226,49 @@
     b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  function confirmThen(html, run) {
-    $('previewBody').innerHTML = html;
-    $('confirmBtn').onclick = () => { modal.hide(); run(); };
+  // Preview before saving: shows every entry in a table, with "Back to Edit" and "Confirm & Submit".
+  // rows = [{label, value, warn}], opts = { photo, note, extra(el) }
+  function confirmThen(title, rows, run, opts) {
+    opts = opts || {};
+    stopSpeak();
+    $('pvTitle').textContent = 'Preview - ' + title;
+    const body = $('pvBody'); body.innerHTML = '';
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th'); th.textContent = r.label;
+      const td = document.createElement('td'); td.textContent = r.value;
+      if (r.warn) td.className = 'text-danger';
+      tr.append(th, td); body.appendChild(tr);
+    });
+    const ph = $('pvPhoto'); ph.innerHTML = '';
+    if (opts.photo) {
+      const img = document.createElement('img'); img.src = opts.photo; img.className = 'preview-box'; img.style.maxWidth = '140px';
+      const cap = document.createElement('div'); cap.className = 'small text-muted'; cap.textContent = 'Tester photo';
+      ph.append(img, cap);
+    }
+    const ex = $('pvExtra'); ex.innerHTML = '';
+    if (opts.note) { const n = document.createElement('div'); n.className = 'small text-muted mb-2'; n.textContent = opts.note; ex.appendChild(n); }
+    if (opts.extra) opts.extra(ex);
+    $('pvRead').onclick = () => { speaking ? stopSpeak() : speak(title, rows); };
+    $('confirmBtn').onclick = () => { stopSpeak(); modal.hide(); run(); };
     modal.show();
   }
+
+  let speaking = false;
+  function stopSpeak() { try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {} speaking = false; if ($('pvRead')) $('pvRead').textContent = '🔊 Read aloud'; }
+  function speak(title, rows) {
+    if (!window.speechSynthesis) { alert('Read-aloud is not supported in this browser.'); return; }
+    speechSynthesis.cancel();
+    const parts = [title + '. Please check the entries.'].concat(rows.map(r => r.label.replace(/[()]/g, ' ') + ': ' + String(r.value).replace(/[()]/g, ' ')), ['End of preview. Press confirm to submit, or back to edit to change.']);
+    speaking = true; $('pvRead').textContent = '⏹ Stop reading';
+    parts.forEach((t, i) => {
+      const u = new SpeechSynthesisUtterance(t); u.lang = 'en-IN'; u.rate = 0.95;
+      if (i === parts.length - 1) u.onend = stopSpeak;
+      u.onerror = stopSpeak;
+      speechSynthesis.speak(u);
+    });
+  }
+  $('previewModal').addEventListener('hidden.bs.modal', stopSpeak);
 
   // Saves once; the button is locked while waiting so a double tap cannot create a duplicate row.
   async function submit(btn, action, payload, onOk) {
@@ -256,9 +304,18 @@
       date: $('prodDate').value, unit: $('prodUnit').value, subDetail: $('prodDetails').value, shift: $('prodShift').value,
       quantity: $('prodQty').value, serialNo: $('prodSerial').value.trim().toUpperCase()
     };
-    confirmThen(`<p><b>Date:</b> ${esc(d.date)}<br><b>Unit:</b> ${esc(d.unit)} | <b>Details:</b> ${esc(d.subDetail)} | <b>Shift:</b> ${esc(d.shift)}<br>
-      <b>Qty:</b> ${esc(d.quantity)}<br><b>Serial:</b> ${esc(d.serialNo)}</p>`,
-      () => submit($('btnProd'), 'submitProductionHandover', d, () => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d.date || '');
+    const SC = { 'Day': 'D', 'Day2': 'D2', 'Night': 'N', 'Night2': 'N2', 'Day & Night': 'DN' };
+    const batch = m ? (m[3] + m[2] + m[1].slice(-2) + ' ' + (SC[d.shift] || 'D') + ' ' + d.unit + ' ' + d.subDetail) : '';
+    confirmThen('Production Handover', [
+      { label: 'Production Date', value: d.date },
+      { label: 'Unit', value: d.unit },
+      { label: 'Details', value: d.subDetail },
+      { label: 'Shift', value: d.shift },
+      { label: 'Handover Quantity', value: d.quantity },
+      { label: 'Serial Number', value: d.serialNo },
+      { label: 'Batch Number (will be created)', value: batch }
+    ], () => submit($('btnProd'), 'submitProductionHandover', d, () => {
         $('prodQty').value = ''; $('prodSerial').value = ''; loadLastSerial();
       }));
   });
@@ -269,12 +326,12 @@
   async function startCam() {
     stopCam();
     camStatus('Starting camera…');
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camStatus('✖ Camera not supported in this browser.', false); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camStatus('Camera not available - selfie is optional, you can continue without it.'); return; }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
       $('webcam').srcObject = stream;
       camStatus('✔ Camera ready – press "Capture Selfie"', true);
-    } catch (err) { camStatus('✖ Camera error: ' + (err.name || err) + '. Allow camera permission and press Restart Camera.', false); }
+    } catch (err) { camStatus('Camera not available (' + (err.name || err) + ') - selfie is optional. Allow the camera and press Restart Camera if you want to take one.'); }
   }
   $('btnCam').addEventListener('click', startCam);
   $('btnCapture').addEventListener('click', () => {
@@ -350,21 +407,39 @@
 
   $('labForm').addEventListener('submit', e => {
     e.preventDefault();
-    if (!selfie) { say('Please capture the tester selfie first.', false); return; }
     const batch = labBatches.find(x => x.id === $('labBatchSelect').value);
     const d = {
       date: $('labDate').value, prodId: $('labBatchSelect').value, testerName: $('labTester').value,
-      selfieBase64: selfie, params: collectParams(), retest: (batch && batch.tested) ? 'YES' : ''
+      params: collectParams(), retest: (batch && batch.tested) ? 'YES' : ''
     };
-    const filled = Object.keys(d.params).filter(k => d.params[k] !== '').length;
-    confirmThen(`<p><b>Batch:</b> ${esc(d.prodId)}${d.retest ? ' <span class="badge bg-warning text-dark">RE-TEST</span>' : ''}<br>
-      <b>Serial:</b> ${esc($('labSerial').value)}<br><b>Tester:</b> ${esc(d.testerName)}<br>
-      <b>Test date:</b> ${esc(d.date)}<br><b>Tests entered:</b> ${filled}<br>Selfie: Yes</p>`,
-      () => submit($('btnLab'), 'submitLabTest', d, () => {
+    if (selfie) d.selfieBase64 = selfie;      // selfie is optional - sent only if taken
+    const rows = [
+      { label: 'Test Date', value: d.date },
+      { label: 'Batch Number', value: d.prodId },
+      { label: 'Serial Number', value: $('labSerial').value }
+    ];
+    if (d.retest) rows.push({ label: 'Type', value: 'RE-TEST', warn: true });
+    rows.push({ label: 'Tester Name', value: d.testerName });
+    let blank = 0;
+    Object.keys(d.params).forEach(k => { if (d.params[k] === '') blank++; else rows.push({ label: k, value: d.params[k] }); });
+    confirmThen('Lab Result', rows, () => submit($('btnLab'), 'submitLabTest', d, () => {
         document.querySelectorAll('[data-param]').forEach(i => i.value = '');
         selfie = ''; $('previewContainer').style.display = 'none'; $('gradeBox').style.display = 'none';
         loadLabBatches();
-      }));
+      }), {
+      photo: selfie || '',
+      note: (blank ? blank + ' optional test(s) left blank - not counted against any grade. ' : '') + (selfie ? '' : 'No selfie taken (optional).'),
+      extra: el => {
+        const g = document.createElement('div'); g.className = 'small text-muted'; g.textContent = 'Checking grades...'; el.appendChild(g);
+        api('previewLabGrades', { params: d.params }).then(r => {
+          if (!r || r.status !== 'SUCCESS') { g.textContent = ''; return; }
+          const pass = r.grades.filter(x => x.result === 'Y').map(x => x.grade);
+          const real = r.grades.some(x => x.result === 'Y' || x.result === 'N');
+          g.className = 'alert py-2 small mb-0 ' + (!real ? 'alert-secondary' : pass.length ? 'alert-success' : 'alert-warning');
+          g.textContent = !real ? 'No grade limits are set in Spec_Master yet.' : pass.length ? 'This result passes: ' + pass.join(', ') : 'Passes no specific grade - will be despatched as NORMAL GRADE.';
+        }).catch(() => { g.textContent = ''; });
+      }
+    });
   });
 
   // ========== DESPATCH ==========
@@ -442,10 +517,15 @@
       if (!it.grade) { say(it.prodId + ': choose a grade.', false); return; }
     }
     const d = { date: $('despDate').value, sellerName: $('despSeller').value.trim(), items };
-    const rows = items.map(i => `<tr><td>${esc(i.prodId)}</td><td>${esc(i.quantity)}</td><td>${esc(i.grade)}</td></tr>`).join('');
-    confirmThen(`<p><b>Date:</b> ${esc(d.date)}<br><b>Seller:</b> ${esc(d.sellerName)}</p>
-      <table class="table table-sm"><thead><tr><th>Batch</th><th>Qty</th><th>Grade</th></tr></thead><tbody>${rows}</tbody></table>`,
-      () => submit($('btnDesp'), 'submitDespatch', d, () => { sel = {}; $('despSeller').value = ''; loadLots(); }));
+    const rows = [{ label: 'Despatch Date', value: d.date }, { label: 'Seller / Buyer', value: d.sellerName }];
+    let total = 0;
+    items.forEach(i => {
+      total += i.quantity;
+      const l = lots.find(x => x.id === i.prodId);
+      rows.push({ label: i.prodId, value: i.quantity + ' kg  |  Grade: ' + i.grade + (l && !l.tested ? '  (lab result pending)' : '') });
+    });
+    rows.push({ label: 'Total Quantity', value: String(total) + ' kg' });
+    confirmThen('Despatch', rows, () => submit($('btnDesp'), 'submitDespatch', d, () => { sel = {}; $('despSeller').value = ''; loadLots(); }));
   });
 
   // ========== INIT ==========
